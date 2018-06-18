@@ -6,7 +6,9 @@ import (
 	"fmt"
 	//"github.com/rlmcpherson/s3gof3r"
 	// Using the mediapeers fork due to fixes around special characters
-	"github.com/mediapeers/s3gof3r"
+	//"github.com/mediapeers/s3gof3r"
+	// Using the teamlakana fork due to fixes around special characters
+	"github.com/teamlakana/s3gof3r"
 	"io"
 	"log"
 	"mime"
