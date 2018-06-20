@@ -29,12 +29,44 @@ const (
 	//RequestTimeout     int = 5
 )
 
+// custom error implementation
+type ErrS3Put struct {
+	message string
+}
+
+func NewErrS3Put(message string) *ErrS3Put {
+	return &ErrS3Put{
+		message: message,
+	}
+}
+
+func (e *ErrS3Put) Error() string {
+	return e.message
+}
+
+// custom error implementation
+type ErrIOCopy struct {
+	message string
+}
+
+func NewErrIOCopy(message string) *ErrIOCopy {
+	return &ErrIOCopy{
+		message: message,
+	}
+}
+
+func (e *ErrIOCopy) Error() string {
+	return e.message
+}
+
+// custom structs for the queuing
 type Job struct {
 	id          int
 	baseHttpUrl string
 	s3Bucket    string
 	objectPath  string
 }
+
 type Result struct {
 	job   Job
 	bytes int64
@@ -67,7 +99,15 @@ func createHTTPClient() *http.Client {
 func worker(wg *sync.WaitGroup, k s3gof3r.Keys) {
 	httpClient = createHTTPClient()
 	for job := range jobs {
-		b, c, u := streamHttpToS3(job.baseHttpUrl, job.s3Bucket, job.objectPath, k)
+		b, c, u, err := streamHttpToS3(job.baseHttpUrl, job.s3Bucket, job.objectPath, k)
+		if err != nil {
+			switch err.(type) {
+			case *ErrS3Put:
+				// retry?
+			default:
+				// do nothing
+			}
+		}
 		output := Result{job: job, bytes: b, code: c, s3Url: u}
 		results <- output
 	}
@@ -120,7 +160,7 @@ func main() {
 	fmt.Println("total time taken ", diff.Seconds(), "seconds")
 }
 
-func streamHttpToS3(basehttpurl string, s3bucket string, objectpath string, keys s3gof3r.Keys) (int64, int, string) {
+func streamHttpToS3(basehttpurl string, s3bucket string, objectpath string, keys s3gof3r.Keys) (int64, int, string, error) {
 	objectpathAsUrl, err := url.Parse(objectpath)
 	if err != nil {
 		panic(err)
@@ -147,6 +187,7 @@ func streamHttpToS3(basehttpurl string, s3bucket string, objectpath string, keys
 	if err != nil {
 		log.Print("Failed S3 PUT: " + objectpath + " Error was: " + fmt.Sprint(err))
 		//log.Fatal(err)
+		return -1, -1, geturl, NewErrS3Put("Failed S3 PUT")
 	}
 	defer s3writer.Close()
 
@@ -164,7 +205,7 @@ func streamHttpToS3(basehttpurl string, s3bucket string, objectpath string, keys
 		defer getresponse.Body.Close()
 		_, err = io.Copy(pipeinput, getresponse.Body)
 		if err != nil {
-			log.Print("Failed io.Copy operation: " + objectpath + " Error was: " + fmt.Sprint(err))
+			log.Print("Failed io.Copy operation into Pipe: " + objectpath + " Error was: " + fmt.Sprint(err))
 		}
 		statuscode = getresponse.StatusCode
 	}()
@@ -173,8 +214,9 @@ func streamHttpToS3(basehttpurl string, s3bucket string, objectpath string, keys
 	var bytesxferred int64
 	bytesxferred, err = io.Copy(s3writer, pipeoutput)
 	if err != nil {
-		log.Print("Failed io.Copy operation: " + objectpath + " Error was: " + fmt.Sprint(err))
+		log.Print("Failed io.Copy operation from Pipe: " + objectpath + " Error was: " + fmt.Sprint(err))
 		//log.Fatal(err)
+		return -1, -1, geturl, NewErrIOCopy("Failed io.Copy operation")
 	}
-	return bytesxferred, statuscode, geturl
+	return bytesxferred, statuscode, geturl, nil
 }
