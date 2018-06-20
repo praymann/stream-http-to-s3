@@ -205,7 +205,7 @@ func streamHttpToS3(basehttpurl string, s3bucket string, objectpath string, keys
 		defer getresponse.Body.Close()
 		_, err = io.Copy(pipeinput, getresponse.Body)
 		if err != nil {
-			log.Print("Failed io.Copy operation: " + objectpath + " Error was: " + fmt.Sprint(err))
+			log.Print("Failed io.Copy operation into Pipe: " + objectpath + " Error was: " + fmt.Sprint(err))
 		}
 		statuscode = getresponse.StatusCode
 	}()
@@ -214,7 +214,7 @@ func streamHttpToS3(basehttpurl string, s3bucket string, objectpath string, keys
 	var bytesxferred int64
 	bytesxferred, err = io.Copy(s3writer, pipeoutput)
 	if err != nil {
-		log.Print("Failed io.Copy operation: " + objectpath + " Error was: " + fmt.Sprint(err))
+		log.Print("Failed io.Copy operation from Pipe: " + objectpath + " Error was: " + fmt.Sprint(err))
 		//log.Fatal(err)
 		return -1, -1, geturl, NewErrIOCopy("Failed io.Copy operation")
 	}
