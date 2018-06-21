@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
 	//"github.com/rlmcpherson/s3gof3r"
@@ -163,7 +164,8 @@ func main() {
 func streamHttpToS3(basehttpurl string, s3bucket string, objectpath string, keys s3gof3r.Keys) (int64, int, string, error) {
 	objectpathAsUrl, err := url.Parse(objectpath)
 	if err != nil {
-		panic(err)
+		log.Print("Failed URL Parse: " + objectpath + " Error was: " + fmt.Sprint(err))
+		return -1, -1, "", errors.New("failed to parse " + objectpath)
 	}
 	// objectpathAsUrl.String()
 	var filename string = path.Base(objectpath)
