@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"log"
 	"mime"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -26,10 +27,10 @@ type Job struct {
 	objectPath string
 }
 type Result struct {
-	job Job
-  objectPath string
-  lastModified *time.Time
-  contentType string
+	job          Job
+	objectPath   string
+	lastModified *time.Time
+	contentType  string
 }
 
 var (
@@ -44,7 +45,7 @@ func worker(wg *sync.WaitGroup, s3svc *s3.S3) {
 	for job := range jobs {
 		output, contenttype := copyWithinS3(job.s3Bucket, job.objectPath, s3svc)
 		//fmt.Println(resultoutput)
-		result := Result{job: job, objectPath: job.objectPath, lastModified: output.LastModified, contentType: contenttype }
+		result := Result{job: job, objectPath: job.objectPath, lastModified: output.LastModified, contentType: contenttype}
 		results <- result
 	}
 	wg.Done()
@@ -107,15 +108,18 @@ func main() {
 }
 
 func copyWithinS3(s3bucket string, objectpath string, s3svc *s3.S3) (result *s3.CopyObjectResult, newtype string) {
+	objectpathAsUrl, err := url.Parse(objectpath)
+	if err != nil {
+		log.Print("Failed URL Parse: " + objectpath + " Error was: " + fmt.Sprint(err))
+	}
 	var filename string = path.Base(objectpath)
-	// Set the Content-type based upon the file extension
 	var contenttype string = mime.TypeByExtension(filepath.Ext(filename))
 
 	input := &s3.CopyObjectInput{
-		Bucket:      aws.String(s3bucket),
-		Key:         aws.String(objectpath),
-		CopySource:  aws.String(s3bucket + objectpath),
-		ContentType: aws.String(contenttype),
+		Bucket:            aws.String(s3bucket),
+		Key:               aws.String(objectpathAsUrl.String()),
+		CopySource:        aws.String(s3bucket + objectpathAsUrl.String()),
+		ContentType:       aws.String(contenttype),
 		MetadataDirective: aws.String("REPLACE"),
 	}
 
