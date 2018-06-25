@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"errors"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -29,7 +30,6 @@ type Job struct {
 type Result struct {
 	job          Job
 	objectPath   string
-	lastModified *time.Time
 	contentType  string
 }
 
@@ -43,9 +43,12 @@ var (
 
 func worker(wg *sync.WaitGroup, s3svc *s3.S3) {
 	for job := range jobs {
-		output, contenttype := copyWithinS3(job.s3Bucket, job.objectPath, s3svc)
+		t, err := copyWithinS3(job.s3Bucket, job.objectPath, s3svc)
 		//fmt.Println(resultoutput)
-		result := Result{job: job, objectPath: job.objectPath, lastModified: output.LastModified, contentType: contenttype}
+		if err != nil {
+			log.Print("(id " + strconv.Itoa(job.id) + ") - [" + job.objectPath +"] - ERROR: " + err.Error())
+		}
+		result := Result{job: job, objectPath: job.objectPath, contentType: t}
 		results <- result
 	}
 	wg.Done()
@@ -65,7 +68,7 @@ func createWorkerPool(noOfWorkers int, s3svc *s3.S3) {
 
 func result(done chan bool) {
 	for result := range results {
-		log.Print("(id " + strconv.Itoa(result.job.id) + ") - [" + result.objectPath + "] - Modified: " + result.lastModified.Format("2006-01-02 15:04:05") + " - To: " + result.contentType)
+		log.Print("(id " + strconv.Itoa(result.job.id) + ") - [" + result.objectPath + "] - ContentType: " + result.contentType)
 	}
 	done <- true
 }
@@ -107,10 +110,10 @@ func main() {
 	fmt.Println("total time taken ", diff.Seconds(), "seconds")
 }
 
-func copyWithinS3(s3bucket string, objectpath string, s3svc *s3.S3) (result *s3.CopyObjectResult, newtype string) {
+func copyWithinS3(s3bucket string, objectpath string, s3svc *s3.S3) (t string, err error) {
 	objectpathAsUrl, err := url.Parse(objectpath)
 	if err != nil {
-		log.Print("Failed URL Parse: " + objectpath + " Error was: " + fmt.Sprint(err))
+		return "", errors.New("Failed to parse")
 	}
 	var filename string = path.Base(objectpath)
 	var contenttype string = mime.TypeByExtension(filepath.Ext(filename))
@@ -125,7 +128,7 @@ func copyWithinS3(s3bucket string, objectpath string, s3svc *s3.S3) (result *s3.
 
 	//fmt.Println(input)
 
-	output, err := s3svc.CopyObject(input)
+	_, err = s3svc.CopyObject(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -137,10 +140,8 @@ func copyWithinS3(s3bucket string, objectpath string, s3svc *s3.S3) (result *s3.
 			// Message from an error.
 			fmt.Println(err.Error())
 		}
-		return
+		return "", err
 	}
 
-	result = output.CopyObjectResult
-
-	return result, contenttype
+	return contenttype, nil
 }
