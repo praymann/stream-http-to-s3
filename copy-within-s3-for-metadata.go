@@ -2,9 +2,9 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
-	"errors"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -28,9 +28,9 @@ type Job struct {
 	objectPath string
 }
 type Result struct {
-	job          Job
-	objectPath   string
-	contentType  string
+	job         Job
+	objectPath  string
+	contentType string
 }
 
 var (
@@ -46,7 +46,7 @@ func worker(wg *sync.WaitGroup, s3svc *s3.S3) {
 		t, err := copyWithinS3(job.s3Bucket, job.objectPath, s3svc)
 		//fmt.Println(resultoutput)
 		if err != nil {
-			log.Print("(id " + strconv.Itoa(job.id) + ") - [" + job.objectPath +"] - ERROR: " + err.Error())
+			log.Print("(id " + strconv.Itoa(job.id) + ") - [" + job.objectPath + "] - ERROR: " + err.Error())
 		}
 		result := Result{job: job, objectPath: job.objectPath, contentType: t}
 		results <- result
@@ -120,7 +120,7 @@ func copyWithinS3(s3bucket string, objectpath string, s3svc *s3.S3) (t string, e
 
 	input := &s3.CopyObjectInput{
 		Bucket:            aws.String(s3bucket),
-		Key:               aws.String(objectpathAsUrl.String()),
+		Key:               aws.String(objectpath),
 		CopySource:        aws.String(s3bucket + objectpathAsUrl.String()),
 		ContentType:       aws.String(contenttype),
 		MetadataDirective: aws.String("REPLACE"),
